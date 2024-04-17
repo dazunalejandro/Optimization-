@@ -1,5 +1,5 @@
 import sys
-
+import random
 from crossword import *
 
 
@@ -99,7 +99,10 @@ class CrosswordCreator():
         (Remove any values that are inconsistent with a variable's unary
          constraints; in this case, the length of the word.)
         """
-        raise NotImplementedError
+        for v in self.crossword.variables:
+            for word in self.domains[v].copy():
+                if v.length != len(word):
+                    self.domains[v].remove(word)
 
     def revise(self, x, y):
         """
@@ -110,7 +113,14 @@ class CrosswordCreator():
         Return True if a revision was made to the domain of `x`; return
         False if no revision was made.
         """
-        raise NotImplementedError
+        (i, j) = self.crossword.overlaps[x, y]
+        revised = False
+        for x_word in self.domains[x].copy():
+            if not any([x_word[i] == y_word[j] for y_word in self.domains[y]]):
+                self.domains[x].remove(x_word)
+                revised = True
+
+        return revised
 
     def ac3(self, arcs=None):
         """
@@ -121,21 +131,49 @@ class CrosswordCreator():
         Return True if arc consistency is enforced and no domains are empty;
         return False if one or more domains end up empty.
         """
-        raise NotImplementedError
+        if arcs == None:
+            arcs = [(x, y) for x in self.crossword.variables 
+                            for y in  self.crossword.neighbors(x)]
+        while arcs != []:
+            (x, y) = arcs.pop()
+            if self.revise(x, y):
+                if len(self.domains[x]) == 0:
+                    return False
+                for z in (self.crossword.neighbors(x) - {y}):
+                    arcs.insert(0, (z,x))
+
+        return True
 
     def assignment_complete(self, assignment):
         """
         Return True if `assignment` is complete (i.e., assigns a value to each
         crossword variable); return False otherwise.
         """
-        raise NotImplementedError
+        if len(assignment) != len(self.crossword.variables):
+            return False
+        return True
 
     def consistent(self, assignment):
         """
         Return True if `assignment` is consistent (i.e., words fit in crossword
         puzzle without conflicting characters); return False otherwise.
         """
-        raise NotImplementedError
+        
+        uniqueness = (len(set(list(assignment.values()))) == len(list(assignment.values())))
+        variables = set(assignment.keys())
+        flag = True
+        for v1 in variables:
+            for v2 in (variables-{v1}):
+                if self.crossword.overlaps[v1,v2] != None:
+                    (i,j) = self.crossword.overlaps[v1,v2]
+                    if assignment[v1][i] != assignment[v2][j]:
+                        flag = False
+        if uniqueness and flag:
+            return True
+        return False
+
+
+
 
     def order_domain_values(self, var, assignment):
         """
@@ -144,8 +182,17 @@ class CrosswordCreator():
         The first value in the list, for example, should be the one
         that rules out the fewest values among the neighbors of `var`.
         """
-        raise NotImplementedError
-
+        
+        order = dict.fromkeys(self.domains[var], 0)
+        for var_word in self.domains[var]:
+            for var_neighbour in (self.crossword.neighbors(var) - {*assignment.keys()}):
+                (i,j) = self.crossword.overlaps[var, var_neighbour]
+                for neighbour_word in self.domains[var_neighbour]:
+                    if var_word[i] != neighbour_word[j]:
+                        order[var_word] += 1
+        sorted_order = dict(sorted(order.items(), key=lambda x:x[1]))
+        return list(sorted_order.keys())
+    
     def select_unassigned_variable(self, assignment):
         """
         Return an unassigned variable not already part of `assignment`.
@@ -154,7 +201,21 @@ class CrosswordCreator():
         degree. If there is a tie, any of the tied variables are acceptable
         return values.
         """
-        raise NotImplementedError
+        unassigned_variables = (self.crossword.variables - {*assignment.keys()})
+        var_domain_size = {}
+        var_num_neighbors = {}
+        for var in unassigned_variables:
+                var_domain_size[var] = len(self.domains[var])
+                var_num_neighbors[var] = len(self.crossword.neighbors(var))
+        var_domain_size = dict(sorted(var_domain_size.items(), key=lambda x:x[1]))
+        var_num_neighbors = dict(sorted(var_num_neighbors.items(), key=lambda x:x[1]))
+        if sum([1 for value in var_domain_size.values() if value == list(var_domain_size.values())[0]]) > 1:
+            if sum([1 for value in var_num_neighbors.values() if value == list(var_num_neighbors.values())[0]]) > 1:
+                return random.choice([var for value in var_num_neighbors.values() if value == list(var_domain_size.values())[0]])
+            else:
+                return list(var_num_neighbors.keys())[0]
+        else:
+            return list(var_domain_size.keys())[0]
 
     def backtrack(self, assignment):
         """
@@ -165,7 +226,22 @@ class CrosswordCreator():
 
         If no assignment is possible, return None.
         """
-        raise NotImplementedError
+
+        if self.assignment_complete(assignment):
+            return assignment
+        var = self.select_unassigned_variable(assignment)
+        for value in self.order_domain_values(var, assignment):
+            new_assignment = assignment.copy()
+            new_assignment[var] = value
+            if self.consistent(new_assignment):
+                result = self.backtrack(new_assignment)
+                if result is not None:
+                    return result
+                else:
+                    new_assignment.remove(var)
+
+                
+        return None
 
 
 def main():
@@ -186,7 +262,7 @@ def main():
 
     # Print result
     if assignment is None:
-        print("No solution.")
+         print("No solution.")
     else:
         creator.print(assignment)
         if output:
