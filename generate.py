@@ -158,7 +158,7 @@ class CrosswordCreator():
         Return True if `assignment` is consistent (i.e., words fit in crossword
         puzzle without conflicting characters); return False otherwise.
         """
-        
+        node_consistency = all([True if var.length == len(word) else False for var, word in assignment.items()])
         uniqueness = (len(set(list(assignment.values()))) == len(list(assignment.values())))
         variables = set(assignment.keys())
         flag = True
@@ -168,7 +168,7 @@ class CrosswordCreator():
                     (i,j) = self.crossword.overlaps[v1,v2]
                     if assignment[v1][i] != assignment[v2][j]:
                         flag = False
-        if uniqueness and flag:
+        if uniqueness and flag and node_consistency:
             return True
         return False
 
@@ -211,7 +211,7 @@ class CrosswordCreator():
         var_num_neighbors = dict(sorted(var_num_neighbors.items(), key=lambda x:x[1]))
         if sum([1 for value in var_domain_size.values() if value == list(var_domain_size.values())[0]]) > 1:
             if sum([1 for value in var_num_neighbors.values() if value == list(var_num_neighbors.values())[0]]) > 1:
-                return random.choice([var for value in var_num_neighbors.values() if value == list(var_domain_size.values())[0]])
+                return random.choice([var for value in var_num_neighbors.values() if value == list(var_num_neighbors.values())[0]])
             else:
                 return list(var_num_neighbors.keys())[0]
         else:
@@ -238,7 +238,7 @@ class CrosswordCreator():
                 if result is not None:
                     return result
                 else:
-                    new_assignment.remove(var)
+                    new_assignment.pop(var)
 
                 
         return None
